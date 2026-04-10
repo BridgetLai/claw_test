@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recall Timer - 遗忘曲线复习提醒</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #141414;
+      --card-hover: #1a1a1a;
+      --border: #2a2a2a;
+      --text: #f0f0f0;
+      --text-dim: #666;
+      --accent: #00d4aa;
+      --accent-glow: rgba(0, 212, 170, 0.3);
+      --danger: #ff4757;
+      --warning: #ffa502;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      padding: 24px;
+      background-image: 
+        radial-gradient(ellipse at top, rgba(0, 212, 170, 0.05) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(0, 212, 170, 0.03) 0%, transparent 40%);
+    }
+
+    .container {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent) 0%, #00a88a 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: var(--text-dim);
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(0, 212, 170, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* 遗忘曲线时间轴 */
+    .timeline {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 6px;
+      margin-bottom: 20px;
+      padding: 16px 0;
+      overflow-x: auto;
+    }
+
+    .timeline-item {
+      flex: 1;
+      min-width: 50px;
+      text-align: center;
+      position: relative;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      background: var(--border);
+      border-radius: 50%;
+      margin: 0 auto 8px;
+      transition: all 0.3s ease;
+    }
+
+    .timeline-item.active .timeline-dot {
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+      transform: scale(1.3);
+    }
+
+    .timeline-item.passed .timeline-dot {
+      background: var(--text-dim);
+    }
+
+    .timeline-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .timeline-item.active .timeline-label {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .timeline-time {
+      font-size: 9px;
+      color: #444;
+      margin-top: 4px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, #00a88a 100%);
+      color: #000;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--accent-glow);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-danger {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    /* 自定义间隔 */
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .input-group {
+      flex: 1;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      transition: all 0.2s ease;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* 闹钟列表 */
+    .alarm-list {
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .alarm-item {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      background: var(--bg);
+      border-radius: 12px;
+      margin-bottom: 10px;
+      transition: all 0.2s ease;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alarm-item:hover {
+      background: var(--card-hover);
+    }
+
+    .alarm-time {
+      font-size: 16px;
+      font-weight: 600;
+      min-width: 90px;
+    }
+
+    .alarm-info {
+      flex: 1;
+    }
+
+    .alarm-label {
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .alarm-countdown {
+      font-size: 11px;
+      color: var(--warning);
+    }
+
+    .alarm-item.expired .alarm-countdown {
+      color: var(--text-dim);
+    }
+
+    .btn-delete {
+      padding: 8px 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-delete:hover {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: var(--text-dim);
+    }
+
+    .empty-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    /* 统计 */
+    .stats {
+      display: flex;
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .stat-item {
+      flex: 1;
+      text-align: center;
+      border-right: 1px solid var(--border);
+    }
+
+    .stat-item:last-child {
+      border-right: none;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* 通知权限 */
+    .permission-banner {
+      background: linear-gradient(135deg, rgba(255, 165, 2, 0.1) 0%, rgba(255, 165, 2, 0.05) 100%);
+      border: 1px solid rgba(255, 165, 2, 0.3);
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: var(--warning);
+      margin-bottom: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: all 0.2s ease;
+    }
+
+    .permission-banner:hover {
+      background: linear-gradient(135deg, rgba(255, 165, 2, 0.15) 0%, rgba(255, 165, 2, 0.1) 100%);
+    }
+
+    .permission-banner.hidden {
+      display: none;
+    }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-dim);
+    }
+
+    /* Toast 通知 */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 14px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transition: transform 0.3s ease;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .toast.success {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .toast.error {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📚 Recall Timer</h1>
+      <p>遗忘曲线复习提醒 · 科学记忆</p>
+    </div>
+
+    <!-- 通知权限 -->
+    <div class="permission-banner" id="permissionBanner" onclick="requestPermission()">
+      <span>🔔</span>
+      <span>点击开启浏览器通知权限</span>
+    </div>
+
+    <!-- 遗忘曲线模式 -->
+    <div class="card">
+      <div class="card-title">🎯 遗忘曲线模式</div>
+      <div class="timeline" id="timeline">
+        <!-- 由 JS 生成 -->
+      </div>
+      <button class="btn btn-primary" onclick="setEbbinghausCurve()">
+        🚀 一键设置遗忘曲线闹钟
+      </button>
+    </div>
+
+    <!-- 自定义间隔 -->
+    <div class="card">
+      <div class="card-title">⏰ 自定义间隔模式</div>
+      <div class="input-row">
+        <div class="input-group">
+          <label>间隔时间（小时）</label>
+          <input type="number" id="intervalHours" value="1" min="0.1" step="0.5">
+        </div>
+        <div class="input-group">
+          <label>闹钟个数</label>
+          <input type="number" id="alarmCount" value="3" min="1" max="20">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="setCustomInterval()">
+        ⚡ 设置自定义闹钟
+      </button>
+    </div>
+
+    <!-- 统计 -->
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-value" id="totalAlarms">0</div>
+        <div class="stat-label">待提醒</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="nextAlarm">--</div>
+        <div class="stat-label">下次提醒</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="totalSets">0</div>
+        <div class="stat-label">已设置轮次</div>
+      </div>
+    </div>
+
+    <!-- 闹钟列表 -->
+    <div class="card">
+      <div class="card-title">📋 复习提醒列表</div>
+      <div class="alarm-list" id="alarmList">
+        <div class="empty-state">
+          <div class="empty-icon">📝</div>
+          <div>暂无闹钟<br>点击上方按钮添加</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-danger" onclick="clearAllAlarms()">
+      🗑️ 清空所有闹钟
+    </button>
+  </div>
+
+  <!-- Toast 通知 -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ========== 配置 ==========
+    const STORAGE_KEY = 'recall-timer-alarms';
+    const TOTAL_SETS_KEY = 'recall-timer-total-sets';
+    
+    // 艾宾浩斯遗忘曲线时间点（分钟）
+    const EBBINGHAUS_CURVE = [
+      { minutes: 5, label: '首次复习' },
+      { minutes: 30, label: '二次巩固' },
+      { minutes: 720, label: '12小时后' },
+      { minutes: 1440, label: '1天后' },
+      { minutes: 4320, label: '3天后' },
+      { minutes: 10080, label: '7天后' },
+      { minutes: 21600, label: '15天后' },
+      { minutes: 43200, label: '30天后' }
+    ];
+
+    // ========== 初始化 ==========
+    document.addEventListener('DOMContentLoaded', () => {
+      checkPermission();
+      renderTimeline();
+      loadAlarms();
+      updateStats();
+      setInterval(updateCountdowns, 1000);
+    });
+
+    // 检查通知权限
+    function checkPermission() {
+      if (!('Notification' in window)) {
+        document.getElementById('permissionBanner').innerHTML = '<span>⚠️</span><span>您的浏览器不支持通知功能</span>';
+        return;
+      }
+      
+      if (Notification.permission === 'granted') {
+        document.getElementById('permissionBanner').classList.add('hidden');
+      } else if (Notification.permission === 'denied') {
+        document.getElementById('permissionBanner').innerHTML = '<span>⚠️</span><span>通知被禁用，请到浏览器设置中开启</span>';
+      }
+    }
+
+    // 请求通知权限
+    async function requestPermission() {
+      const permission = await Notification.requestPermission();
+      checkPermission();
+      if (permission === 'granted') {
+        showToast('通知权限已开启', 'success');
+      }
+    }
+
+    // 渲染时间轴
+    function renderTimeline() {
+      const timeline = document.getElementById('timeline');
+      timeline.innerHTML = EBBINGHAUS_CURVE.map((item, idx) => `
+        <div class="timeline-item" data-index="${idx}">
+          <div class="timeline-dot"></div>
+          <div class="timeline-label">${item.label}</div>
+          <div class="timeline-time">${formatDuration(item.minutes)}</div>
+        </div>
+      `).join('');
+    }
+
+    // 格式化时间间隔
+    function formatDuration(minutes) {
+      if (minutes < 60) return `${minutes}分钟`;
+      if (minutes < 1440) return `${Math.floor(minutes/60)}小时`;
+      return `${Math.floor(minutes/1440)}天`;
+    }
+
+    // ========== 核心功能 ==========
+    
+    // 设置遗忘曲线闹钟
+    function setEbbinghausCurve() {
+      const alarms = getAlarms();
+      const now = Date.now();
+      let addedCount = 0;
+
+      EBBINGHAUS_CURVE.forEach((item, index) => {
+        const id = `curve-${now}-${index}`;
+        const triggerTime = now + item.minutes * 60 * 1000;
+        
+        // 检查是否已存在相同类型的闹钟
+        const exists = alarms.some(a => a.type === 'curve' && a.minutes === item.minutes);
+        if (!exists) {
+          alarms.push({
+            id,
+            triggerTime,
+            label: item.label,
+            type: 'curve',
+            minutes: item.minutes,
+            createdAt: now
+          });
+          addedCount++;
+        }
+      });
+
+      saveAlarms(alarms);
+      incrementTotalSets();
+      loadAlarms();
+      updateStats();
+      
+      if (addedCount > 0) {
+        showToast(`已添加 ${addedCount} 个遗忘曲线复习提醒`, 'success');
+      } else {
+        showToast('所有遗忘曲线闹钟已存在', 'error');
+      }
+    }
+
+    // 设置自定义间隔闹钟
+    function setCustomInterval() {
+      const intervalHours = parseFloat(document.getElementById('intervalHours').value);
+      const alarmCount = parseInt(document.getElementById('alarmCount').value);
+      
+      if (!intervalHours || intervalHours <= 0) {
+        showToast('请输入有效的间隔时间', 'error');
+        return;
+      }
+      
+      if (!alarmCount || alarmCount <= 0 || alarmCount > 20) {
+        showToast('闹钟个数需在 1-20 之间', 'error');
+        return;
+      }
+
+      const alarms = getAlarms();
+      const now = Date.now();
+      const intervalMs = intervalHours * 60 * 60 * 1000;
+
+      for (let i = 0; i < alarmCount; i++) {
+        const id = `custom-${now}-${i}`;
+        const triggerTime = now + intervalMs * (i + 1);
+        
+        alarms.push({
+          id,
+          triggerTime,
+          label: `第 ${i + 1} 次提醒 (${intervalHours}h)`,
+          type: 'custom',
+          createdAt: now
+        });
+      }
+
+      saveAlarms(alarms);
+      incrementTotalSets();
+      loadAlarms();
+      updateStats();
+      
+      showToast(`已添加 ${alarmCount} 个间隔闹钟 (每 ${intervalHours}小时)`, 'success');
+    }
+
+    // ========== 数据管理 ==========
+    function getAlarms() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveAlarms(alarms) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(alarms));
+    }
+
+    function incrementTotalSets() {
+      const current = parseInt(localStorage.getItem(TOTAL_SETS_KEY) || '0');
+      localStorage.setItem(TOTAL_SETS_KEY, (current + 1).toString());
+    }
+
+    function getTotalSets() {
+      return parseInt(localStorage.getItem(TOTAL_SETS_KEY) || '0');
+    }
+
+    // ========== 渲染 ==========
+    function loadAlarms() {
+      const alarms = getAlarms();
+      const listEl = document.getElementById('alarmList');
+      
+      // 按触发时间排序
+      alarms.sort((a, b) => a.triggerTime - b.triggerTime);
+      
+      if (alarms.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">📝</div>
+            <div>暂无闹钟<br>点击上方按钮添加</div>
+          </div>
+        `;
+        return;
+      }
+
+      const now = Date.now();
+
+      listEl.innerHTML = alarms.map(alarm => {
+        const date = new Date(alarm.triggerTime);
+        const timeStr = formatTime(date);
+        const countdown = getCountdown(alarm.triggerTime);
+        const isPast = alarm.triggerTime < now;
+        
+        return `
+          <div class="alarm-item ${isPast ? 'expired' : ''}" data-id="${alarm.id}">
+            <div class="alarm-time" style="${isPast ? 'color: var(--text-dim)' : ''}">${timeStr}</div>
+            <div class="alarm-info">
+              <div class="alarm-label">${alarm.label}</div>
+              <div class="alarm-countdown">${countdown}</div>
+            </div>
+            <button class="btn-delete" onclick="deleteAlarm('${alarm.id}')">删除</button>
+          </div>
+        `;
+      }).join('');
+
+      // 更新遗忘曲线时间轴高亮
+      updateTimelineHighlight(alarms);
+    }
+
+    function updateTimelineHighlight(alarms) {
+      const now = Date.now();
+      const items = document.querySelectorAll('.timeline-item');
+      
+      // 重置所有状态
+      items.forEach(item => {
+        item.classList.remove('active', 'passed');
+      });
+
+      // 找到当前应该复习的阶段
+      const activeAlarm = alarms.find(a => a.triggerTime > now && a.type === 'curve');
+      
+      items.forEach((item, idx) => {
+        const curveItem = EBBINGHAUS_CURVE[idx];
+        if (activeAlarm && activeAlarm.minutes === curveItem.minutes) {
+          item.classList.add('active');
+        } else if (curveItem.minutes * 60 * 1000 < (now - getAlarms()[0]?.createdAt || 0)) {
+          item.classList.add('passed');
+        }
+      });
+    }
+
+    function getCountdown(triggerTime) {
+      const diff = triggerTime - Date.now();
+      
+      if (diff <= 0) return '已过期';
+      
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      
+      if (days > 0) return `${days}天 ${hours % 24}小时`;
+      if (hours > 0) return `${hours}小时 ${minutes % 60}分`;
+      if (minutes > 0) return `${minutes}分`;
+      return `${Math.floor(diff / 1000)}秒`;
+    }
+
+    function updateCountdowns() {
+      const alarms = getAlarms();
+      const now = Date.now();
+      
+      alarms.forEach(alarm => {
+        const el = document.querySelector(`.alarm-item[data-id="${alarm.id}"] .alarm-countdown`);
+        if (el) {
+          const countdown = getCountdown(alarm.triggerTime);
+          el.textContent = countdown;
+          
+          // 检查是否触发
+          if (alarm.triggerTime <= now) {
+            triggerAlarm(alarm);
+          }
+        }
+      });
+    }
+
+    function triggerAlarm(alarm) {
+      // 显示通知
+      if (Notification.permission === 'granted') {
+        new Notification('📚 复习提醒', {
+          body: alarm.label || '是时候复习了！',
+          icon: '🔔',
+          tag: alarm.id
+        });
+      }
+      
+      // 播放提示音
+      playAlertSound();
+      
+      // 移除已触发的闹钟
+      deleteAlarm(alarm.id);
+    }
+
+    function playAlertSound() {
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 创建双音提示
+        [800, 1000].forEach((freq, i) => {
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          oscillator.frequency.value = freq;
+          oscillator.type = 'sine';
+          
+          gainNode.gain.setValueAtTime(0.2, audioContext.currentTime + i * 0.15);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15 + i * 0.15);
+          
+          oscillator.start(audioContext.currentTime + i * 0.15);
+          oscillator.stop(audioContext.currentTime + 0.3 + i * 0.15);
+        });
+      } catch (e) {
+        console.log('Audio not supported');
+      }
+    }
+
+    function deleteAlarm(id) {
+      const alarms = getAlarms();
+      const filtered = alarms.filter(a => a.id !== id);
+      saveAlarms(filtered);
+      loadAlarms();
+      updateStats();
+    }
+
+    function clearAllAlarms() {
+      if (confirm('确定要清空所有闹钟吗？')) {
+        saveAlarms([]);
+        loadAlarms();
+        updateStats();
+        showToast('所有闹钟已清空', 'success');
+      }
+    }
+
+    function updateStats() {
+      const alarms = getAlarms();
+      const now = Date.now();
+      const activeAlarms = alarms.filter(a => a.triggerTime > now);
+      
+      document.getElementById('totalAlarms').textContent = activeAlarms.length;
+      document.getElementById('totalSets').textContent = getTotalSets();
+      
+      if (activeAlarms.length > 0) {
+        document.getElementById('nextAlarm').textContent = getCountdown(activeAlarms[0].triggerTime);
+      } else {
+        document.getElementById('nextAlarm').textContent = '--';
+      }
+    }
+
+    function formatTime(date) {
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}/${day} ${hours}:${minutes}`;
+    }
+
+    // Toast 提示
+    function showToast(message, type = '') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show ' + type;
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    // 页面可见性变化时刷新
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        loadAlarms();
+        updateStats();
+      }
+    });
+  </script>
+</body>
+</html>
